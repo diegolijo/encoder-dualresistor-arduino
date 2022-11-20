@@ -1,0 +1,18 @@
+{
+    "files.associations": {
+        "bitset": "cpp",
+        "optional": "cpp",
+        "type_traits": "cpp",
+        "*.ipp": "cpp",
+        "array": "cpp",
+        "*.tcc": "cpp",
+        "cmath": "cpp",
+        "cstdint": "cpp",
+        "cstdlib": "cpp",
+        "initializer_list": "cpp",
+        "limits": "cpp",
+        "new": "cpp",
+        "tuple": "cpp",
+        "utility": "cpp"
+    }
+}
