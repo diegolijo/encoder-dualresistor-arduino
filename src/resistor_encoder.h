@@ -12,12 +12,16 @@ struct EncoderResistivo
 struct EncoderResistivo
 {
 
-    const static int MIN_OPERATIVE_VALUE = 7;
-    const static int MAX_OPERATIVE_VALUE = 119;
-    const static int MAX_STEP_CHANGE = 16;
+    const static int MIN_OPERATIVE_VALUE = 7 * 8;
+    const static int MAX_OPERATIVE_VALUE = 119 * 8;
+    const static int MIN_STEP_CHANGE = 1 * 8;
+    const static int MAX_STEP_CHANGE = 16 * 8;
+    const static int MIN_TOTAL_CHANGE = 7;
+    const static int MAX_TOTAL_CHANGE = 64 * 8;
 
     const static int REFRESH_TIME = 20;
     const static int VECTOR_LENGHT = 5;
+    const static int SEND_FACTOR = 2;
 
     unsigned long lastTime = millis();
 
@@ -25,52 +29,55 @@ struct EncoderResistivo
     int changes[VECTOR_LENGHT] = {0, 0, 0, 0, 0};
     int totalChanges = 0;
     boolean aleatory = false;
+    boolean stop = false;
 
     int arrayValues1[VECTOR_LENGHT] = {-1, -1, -1, -1, -1};
     int changes1[VECTOR_LENGHT] = {0, 0, 0, 0, 0};
     int totalChanges1 = 0;
     boolean aleatory1 = false;
+    boolean stop1 = false;
 
-    int getTotalChanges(int *arr)
+    int sendCount = 0;
+
+    int getTotalChanges(int *changesArr)
     {
         int changes = 0;
-        for (int i = 0; i < VECTOR_LENGHT - 1; i++)
-        {
-            changes += arr[i] - arr[i + 1];
-        }
-        return changes;
-    }
-
-    void updateVector(int value, int *arr, int *ch, boolean &al, int &total)
-    {
-        int up = 0;
-        int down = 0;
         for (int i = VECTOR_LENGHT - 1; i >= 0; i--)
         {
+            changes += changesArr[i];
+        }
+        return changesArr[0] + changesArr[1] + changesArr[2] + changesArr[3] + changesArr[4];
+    }
 
-            arr[i] = i != 0 ? arr[i - 1] : value / 8;
-            ch[i] = i != 0 ? ch[i - 1] : arr[0] - arr[1];
-            if (ch[i] > 0)
+    void updateVector(int value, int *valuesArr, int *changesArr, boolean &random, int &total)
+    {
+        int up = false;
+        int down = false;
+        for (int i = VECTOR_LENGHT - 1; i >= 0; i--)
+        {
+            valuesArr[i] = i != 0 ? valuesArr[i - 1] : value;
+            changesArr[i] = i != 0 ? changesArr[i - 1] : valuesArr[0] - valuesArr[1];
+            if (changesArr[i] > 0)
             {
-                up += 1;
+                up = true;
             }
-            if (ch[i] < 0)
+            if (changesArr[i] < 0)
             {
-                down += 1;
+                down = true;
             }
         }
-        if (up > 0 && down > 0)
+        if (up == true && down == true)
         {
-            al = true;
+            random = true;
         }
         else
         {
-            al = false;
+            random = false;
         }
-        total = getTotalChanges(arr);
+        total = getTotalChanges(changesArr);
     }
 
-    void updateEncoder(USBMIDI_Interface *midiusb,   MIDIAddress controller )
+    void updateEncoder(USBMIDI_Interface *midiusb, MIDIAddress controller)
     {
 
         if (abs(millis() - lastTime) > REFRESH_TIME)
@@ -81,61 +88,64 @@ struct EncoderResistivo
             updateVector(analogRead(A0), arrayValues, changes, aleatory, totalChanges);
             if (abs(changes1[0]) > 0 && arrayValues1[0] > MIN_OPERATIVE_VALUE && arrayValues1[0] < MAX_OPERATIVE_VALUE)
             {
-                if (abs(totalChanges1) > 1 && abs(totalChanges1) < 64 && abs(changes1[0]) < MAX_STEP_CHANGE && !aleatory1 && arrayValues1[0] != arrayValues1[1])
+                if (abs(totalChanges1) > MIN_TOTAL_CHANGE && abs(totalChanges1) < MAX_TOTAL_CHANGE && abs(changes1[0]) < MAX_STEP_CHANGE && !aleatory1 && arrayValues1[0] != arrayValues1[1])
                 {
+                    stop1 = true;
+                    /* Serial << F("** Values 1: ") << arrayValues1[0] << F(", ") << arrayValues1[1] << F(", ") << arrayValues1[2] << F(", ") << arrayValues1[3] << F(", ") << arrayValues1[4]
+                           << F("  -  changes: ") << changes1[0] << F(", ") << changes1[1] << F(", ") << changes1[2] << F(", ") << changes1[3] << F(", ") << changes1[4]
+                           << F("  -  totalChanges: ") << totalChanges1 << F("  -  aleatory: ") << aleatory1 << endl; */
 
-                    /*                     Serial << F("** Values 1: ") << arrayValues1[0] << F(", ") << arrayValues1[1] << F(", ") << arrayValues1[2] << F(", ") << arrayValues1[3] << F(", ") << arrayValues1[4]
-                                               << F("  -  changes: ") << changes1[0] << F(", ") << changes1[1] << F(", ") << changes1[2] << F(", ") << changes1[3] << F(", ") << changes1[4]
-                                               << F("  -  totalChanges: ") << totalChanges1 << F("  -  aleatory: ") << aleatory1 << endl; */
+                    /*  Serial << F("1  totalChanges: ") << totalChanges1 << F("  -  aleatory: ") << aleatory1 << endl;*/
 
                     value1 = changes1[0];
                 }
-                else
+                else if (aleatory1 && stop1)
                 {
-                    aleatory1 = aleatory1 ? false : true;
-                    if (aleatory1)
-                    {
-                        Serial << F("-------------------------------------------------------------------") << endl;
-                    }
+                    stop1 = false;
+                    Serial << F("1 -------------------------------------------------------------------Values 1: ") << arrayValues1[0] << F(", ") << arrayValues1[1] << F(", ") << arrayValues1[2] << F(", ") << arrayValues1[3] << F(", ") << arrayValues1[4]
+                           << F("  -  changes: ") << changes1[0] << F(", ") << changes1[1] << F(", ") << changes1[2] << F(", ") << changes1[3] << F(", ") << changes1[4]
+                           << F("  -  totalChanges: ") << totalChanges1 << F("  -  aleatory: ") << aleatory1 << endl;
                 }
             }
             if (abs(changes[0]) > 0 && arrayValues[0] > MIN_OPERATIVE_VALUE && arrayValues[0] < MAX_OPERATIVE_VALUE)
             {
-                if (abs(totalChanges) > 1 && abs(totalChanges) < 64 && abs(changes[0]) < MAX_STEP_CHANGE && !aleatory && arrayValues[0] != arrayValues[1])
+                if (abs(totalChanges) > MIN_TOTAL_CHANGE && abs(totalChanges) < MAX_TOTAL_CHANGE && abs(changes[0]) < MAX_STEP_CHANGE && !aleatory && arrayValues[0] != arrayValues[1])
                 {
+                    stop = true;
+                    /* Serial << F("++ Values 0: ") << arrayValues[0] << F(", ") << arrayValues[1] << F(", ") << arrayValues[2] << F(", ") << arrayValues[3] << F(", ") << arrayValues[4]
+                           << F("  -  changes: ") << changes[0] << F(", ") << changes[1] << F(", ") << changes[2] << F(", ") << changes[3] << F(", ") << changes[4]
+                           << F("  -  totalChanges: ") << totalChanges << F("  -  aleatory: ") << aleatory << endl; */
 
-                    /*                     Serial << F("++ Values 0: ") << arrayValues[0] << F(", ") << arrayValues[1] << F(", ") << arrayValues[2] << F(", ") << arrayValues[3] << F(", ") << arrayValues[4]
-                                               << F("  -  changes: ") << changes[0] << F(", ") << changes[1] << F(", ") << changes[2] << F(", ") << changes[3] << F(", ") << changes[4]
-                                               << F("  -  totalChanges: ") << totalChanges << F("  -  aleatory: ") << aleatory << */
+                    /*    Serial << F("0  totalChanges: ") << totalChanges << F("  -  aleatory: ") << aleatory << endl; */
 
                     value = changes[0];
                 }
-                else
+                else if (aleatory && stop)
                 {
-                    aleatory = aleatory ? false : true;
-                    if (aleatory)
-                    {
-                        Serial << F("-------------------------------------------------------------------") << endl;
-                    }
+                    stop = false;
+                    Serial << F("0 -------------------------------------------------------------------Values 0: ") << arrayValues[0] << F(", ") << arrayValues[1] << F(", ") << arrayValues[2] << F(", ") << arrayValues[3] << F(", ") << arrayValues[4]
+                           << F("  -  changes: ") << changes[0] << F(", ") << changes[1] << F(", ") << changes[2] << F(", ") << changes[3] << F(", ") << changes[4]
+                           << F("  -  totalChanges: ") << totalChanges << F("  -  aleatory: ") << aleatory << endl;
                 }
             }
 
-          
-            if (abs(value) > 0 && abs(value1) > 0 && abs(value) == abs(value1))
+            if (abs(value) > 0 && abs(value1) > 0 && abs(value) == abs(value1) && ((sendCount + SEND_FACTOR) % SEND_FACTOR == 0 ? true : false))
             {
-                midiusb->sendCC(controller, value);
-                Serial << F("values:  ") << value << F("  -  ") << value1 << endl;
+                midiusb->sendCC(controller, value1 > 0 ? 1 : -1);
+                Serial << F("1 values:  ") << value1 << F("  -  ") << value1 << endl;
             }
-            else if (abs(value) > 0 && value1 == 0)
+            else if (abs(value) > 0 && value1 == 0 && ((sendCount + SEND_FACTOR) % SEND_FACTOR == 0 ? true : false))
             {
-                midiusb->sendCC(controller, value);
-                Serial << F("values:  ") << value << F("  -  ") << value1 << endl;
+                midiusb->sendCC(controller, value > 0 ? 1 : -1);
+                Serial << F("0 values:  ") << value << F("  -  ") << value1 << endl;
             }
-            else if (abs(value1) > 0 && value == 0)
+            else if (abs(value1) > 0 && value == 0 && ((sendCount + SEND_FACTOR) % SEND_FACTOR == 0 ? true : false))
             {
-                midiusb->sendCC(controller, value1);
-                Serial << F("values:  ") << value << F("  -  ") << value1 << endl;
+                midiusb->sendCC(controller, value1 > 0 ? 1 : -1);
+                Serial << F("1 values:  ") << value << F("  -  ") << value1 << endl;
             }
+
+            sendCount += 1;
 
             lastTime = millis();
         }

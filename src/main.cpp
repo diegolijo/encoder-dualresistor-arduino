@@ -54,17 +54,12 @@ struct MyMIDI_Callbacks : MIDI_Callbacks
   }
 } callbacks;
 
-void sendMessage()
-{
-}
-
 void setup()
 {
   Serial.begin(115200);
   midiusb.begin();
   //  midiusb.setCallbacks(callbacks);
   RelativeCCSender::setMode(relativeCCmode::TWOS_COMPLEMENT); // cubase -> TWOS_COMPLEMENT
-  controller = {MIDI_CC::Channel_Volume_LSB, CHANNEL_1};
   Control_Surface.begin();
 }
 
@@ -73,5 +68,6 @@ void loop()
 {
   midiusb.update();
   Control_Surface.loop();
+  controller = {MIDI_CC::Channel_Volume_LSB, CHANNEL_1};
   encRes.updateEncoder(&midiusb, controller);
 }
